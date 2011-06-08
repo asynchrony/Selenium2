@@ -513,15 +513,14 @@ function parseRequest(request) {
   case "getCookies":
     chrome.cookies.getAll({url: ChromeDriver.currentUrl}, getAllCookiesCallback);
     break;
-  //TODO: Use this code-path when http://crbug.com/56211 is fixed
-  /*case "addCookie":
+  case "addCookie":
     if (hasNoPage()) {
       console.log("Not got a page, but asked to set cookie");
       sendResponseToParsedRequest({status: 25, value: 'Cannot set a cookie when not on a page'});
       break;
     }
     addCookie(request.cookie);
-    break;*/
+    break;
   case "clickElement":
   case "hoverOverElement":
     // Falling through, as native events are handled the same
