@@ -16,6 +16,7 @@ limitations under the License.
 
 package org.openqa.grid.internal.exception;
 
+
 public class GridException extends RuntimeException {
 
 	private static final long serialVersionUID = -3994209521865743841L;

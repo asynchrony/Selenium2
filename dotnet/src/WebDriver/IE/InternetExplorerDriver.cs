@@ -101,7 +101,18 @@ namespace OpenQA.Selenium.IE
         /// <param name="port">The port to use to communicate with the IE server.</param>
         /// <param name="desiredCapabilities">The desired capabilities of the IE driver.</param>
         public InternetExplorerDriver(int port, ICapabilities desiredCapabilities)
-            : base(CreateServerUri(port), desiredCapabilities)
+            : this(port, desiredCapabilities, TimeSpan.FromSeconds(60))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the InternetExplorerDriver class for the specified port, desired capabilities, and command timeout.
+        /// </summary>
+        /// <param name="port">The port to use to communicate with the IE server.</param>
+        /// <param name="desiredCapabilities">The desired capabilities of the IE driver.</param>
+        /// <param name="commandTimeout">The maximum amount of time to wait for each command.</param>
+        public InternetExplorerDriver(int port, ICapabilities desiredCapabilities, TimeSpan commandTimeout)
+            : base(CreateServerUri(port), desiredCapabilities, commandTimeout)
         {
         }
 
@@ -162,12 +173,20 @@ namespace OpenQA.Selenium.IE
             // Locate a free port on the local machine by binding a socket to
             // an IPEndPoint using IPAddress.Any and port 0. The socket will
             // select a free port.
+            int listeningPort = 0;
             Socket portSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            IPEndPoint socketEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            portSocket.Bind(socketEndPoint);
-            socketEndPoint = (IPEndPoint)portSocket.LocalEndPoint;
-            int listeningPort = socketEndPoint.Port;
-            portSocket.Close();
+            try
+            {
+                IPEndPoint socketEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                portSocket.Bind(socketEndPoint);
+                socketEndPoint = (IPEndPoint)portSocket.LocalEndPoint;
+                listeningPort = socketEndPoint.Port;
+            }
+            finally
+            {
+                portSocket.Close();
+            }
+
             return listeningPort;
         }
     }

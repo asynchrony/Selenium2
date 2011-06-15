@@ -31,7 +31,7 @@ namespace OpenQA.Selenium.Chrome
     /// <summary>
     /// Provides a mechanism to execute commands on the browser
     /// </summary>
-    public class ChromeCommandExecutor : HttpCommandExecutor
+    internal class ChromeCommandExecutor : HttpCommandExecutor
     {
         private ChromeDriverService service;
 
@@ -39,8 +39,9 @@ namespace OpenQA.Selenium.Chrome
         /// Initializes a new instance of the <see cref="ChromeCommandExecutor"/> class.
         /// </summary>
         /// <param name="driverService">The <see cref="ChromeDriverService"/> that drives the browser.</param>
-        public ChromeCommandExecutor(ChromeDriverService driverService)
-            : base(driverService.ServiceUrl)
+        /// <param name="commandTimeout">The maximum amount of time to wait for each command.</param>
+        public ChromeCommandExecutor(ChromeDriverService driverService, TimeSpan commandTimeout)
+            : base(GetDriverServiceUrl(driverService), commandTimeout)
         {
             this.service = driverService;
         }
@@ -59,6 +60,17 @@ namespace OpenQA.Selenium.Chrome
         public void Stop()
         {
             this.service.Dispose();
+        }
+
+        private static Uri GetDriverServiceUrl(ChromeDriverService driverService)
+        {
+            Uri driverUrl = null;
+            if (driverService != null)
+            {
+                driverUrl = driverService.ServiceUrl;
+            }
+
+            return driverUrl;
         }
     }
 }

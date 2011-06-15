@@ -19,7 +19,7 @@ package org.openqa.grid.internal.listeners;
 import org.openqa.grid.internal.TestSession;
 
 /**
- * To be impletented by a class extending RemoteProxy.
+ * To be implemented by a class extending RemoteProxy.
  * 
  * WARNING : the before and after are executed by the proxy on the remote, and
  * the action taken in those method are not isolated, and can have consequences
@@ -40,7 +40,7 @@ public interface TestSessionListener {
 	 * Will be run after the proxy slot is reserved for the test, but before the
 	 * first command is forwarded to the remote.
 	 * 
-	 * Gives a change to do a setup on the remote before the test start.
+	 * Gives a chance to do a setup on the remote before the test start.
 	 * 
 	 * WARNING : beforeSession should NOT throw exception. If an exception is
 	 * thrown, the session is considered invalid and the resources will be

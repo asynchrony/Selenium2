@@ -39,6 +39,7 @@ namespace OpenQA.Selenium.Firefox.Internal
         private FirefoxBinary process;
         private HttpCommandExecutor executor;
         private string host;
+        private TimeSpan timeout;
         #endregion
 
         #region Constructor
@@ -48,9 +49,11 @@ namespace OpenQA.Selenium.Firefox.Internal
         /// <param name="binary">The <see cref="FirefoxBinary"/> on which to make the connection.</param>
         /// <param name="profile">The <see cref="FirefoxProfile"/> creating the connection.</param>
         /// <param name="host">The name of the host on which to connect to the Firefox extension (usually "localhost").</param>
-        public ExtensionConnection(FirefoxBinary binary, FirefoxProfile profile, string host)
+        /// <param name="commandTimeout">The maximum amount of time to wait for each command.</param>
+        public ExtensionConnection(FirefoxBinary binary, FirefoxProfile profile, string host, TimeSpan commandTimeout)
         {
             this.host = host;
+            this.timeout = commandTimeout;
             this.profile = profile;
             if (binary == null)
             {
@@ -91,7 +94,7 @@ namespace OpenQA.Selenium.Firefox.Internal
                     this.SetAddress(portToUse);
 
                     // TODO (JimEvans): Get a better url algorithm.
-                    this.executor = new HttpCommandExecutor(new Uri(string.Format(CultureInfo.InvariantCulture, "http://{0}:{1}/hub/", this.host, portToUse)));
+                    this.executor = new HttpCommandExecutor(new Uri(string.Format(CultureInfo.InvariantCulture, "http://{0}:{1}/hub/", this.host, portToUse)), this.timeout);
                 }
                 finally
                 {
@@ -135,40 +138,36 @@ namespace OpenQA.Selenium.Firefox.Internal
 
             for (newport = port; newport < port + 200; newport++)
             {
-                Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
-                IPHostEntry hostEntry = Dns.GetHostEntry(host);
-
-                // Use the first IPv4 address that we find
-                IPAddress endPointAddress = IPAddress.Parse("127.0.0.1");
-                foreach (IPAddress ip in hostEntry.AddressList)
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
                 {
-                    if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    IPHostEntry hostEntry = Dns.GetHostEntry(host);
+
+                    // Use the first IPv4 address that we find
+                    IPAddress endPointAddress = IPAddress.Parse("127.0.0.1");
+                    foreach (IPAddress ip in hostEntry.AddressList)
                     {
-                        endPointAddress = ip;
-                        break;
+                        if (ip.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            endPointAddress = ip;
+                            break;
+                        }
                     }
-                }
 
-                IPEndPoint address = new IPEndPoint(endPointAddress, newport);
+                    IPEndPoint address = new IPEndPoint(endPointAddress, newport);
 
-                try
-                {
-                    socket.Bind(address);
-                    return newport;
-                }
-                catch (SocketException)
-                {
-                    // Port is already bound. Skip it and continue
-                }
-                finally
-                {
-                    socket.Close();
+                    try
+                    {
+                        socket.Bind(address);
+                        return newport;
+                    }
+                    catch (SocketException)
+                    {
+                        // Port is already bound. Skip it and continue
+                    }
                 }
             }
 
-            throw new WebDriverException(
-                string.Format(CultureInfo.InvariantCulture, "Cannot find free port in the range {0} to {0} ", port, newport));
+            throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, "Cannot find free port in the range {0} to {1} ", port, newport));
         }
 
         private static List<IPEndPoint> ObtainLoopbackAddresses(int port)
@@ -230,39 +229,42 @@ namespace OpenQA.Selenium.Firefox.Internal
             // the extension has been properly initialized.
             Socket extensionSocket = null;
             DateTime waitUntil = DateTime.Now.AddMilliseconds(timeToWaitInMilliSeconds);
-            while (!IsSocketConnected(extensionSocket) && waitUntil > DateTime.Now)
+            try
             {
-                foreach (IPEndPoint addr in this.addresses)
+                while (!IsSocketConnected(extensionSocket) && waitUntil > DateTime.Now)
                 {
-                    try
+                    foreach (IPEndPoint addr in this.addresses)
                     {
-                        extensionSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                        extensionSocket.Connect(addr);
-                        break;
-                    }
-                    catch (SocketException)
-                    {
-                        System.Threading.Thread.Sleep(250);
+                        try
+                        {
+                            extensionSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                            extensionSocket.Connect(addr);
+                            break;
+                        }
+                        catch (SocketException)
+                        {
+                            System.Threading.Thread.Sleep(250);
+                        }
                     }
                 }
-            }
 
-            // If the socket was either not created or not connected successfully,
-            // throw an exception. Otherwise, close the socket connection.
-            if (!IsSocketConnected(extensionSocket))
-            {
-                if (extensionSocket == null || extensionSocket.RemoteEndPoint == null)
+                // If the socket was either not created or not connected successfully,
+                // throw an exception.
+                if (!IsSocketConnected(extensionSocket))
                 {
-                    throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, "Failed to start up socket within {0}", timeToWaitInMilliSeconds));
-                }
-                else
-                {
-                    IPEndPoint endPoint = (IPEndPoint)extensionSocket.RemoteEndPoint;
-                    string formattedError = string.Format(CultureInfo.InvariantCulture, "Unable to connect to host {0} on port {1} after {2} ms", endPoint.Address.ToString(), endPoint.Port.ToString(CultureInfo.InvariantCulture), timeToWaitInMilliSeconds);
-                    throw new WebDriverException(formattedError);
+                    if (extensionSocket == null || extensionSocket.RemoteEndPoint == null)
+                    {
+                        throw new WebDriverException(string.Format(CultureInfo.InvariantCulture, "Failed to start up socket within {0}", timeToWaitInMilliSeconds));
+                    }
+                    else
+                    {
+                        IPEndPoint endPoint = (IPEndPoint)extensionSocket.RemoteEndPoint;
+                        string formattedError = string.Format(CultureInfo.InvariantCulture, "Unable to connect to host {0} on port {1} after {2} ms", endPoint.Address.ToString(), endPoint.Port.ToString(CultureInfo.InvariantCulture), timeToWaitInMilliSeconds);
+                        throw new WebDriverException(formattedError);
+                    }
                 }
             }
-            else
+            finally
             {
                 extensionSocket.Close();
             }

@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 
 package org.openqa.grid.web.servlet.handler;
 
@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -37,12 +38,12 @@ import org.openqa.grid.internal.RemoteProxy;
 import org.openqa.grid.internal.TestSession;
 import org.openqa.grid.internal.listeners.Prioritizer;
 import org.openqa.grid.internal.listeners.TestSessionListener;
-
+import org.openqa.grid.web.Hub;
 
 /**
  * Base stuff to handle the request coming from a remote. Ideally, there should
- * be only 1 concrete class, but to support both legacy selenium1 and web driver, 2
- * classes are needed. 
+ * be only 1 concrete class, but to support both legacy selenium1 and web
+ * driver, 2 classes are needed.
  * 
  * {@link Selenium1RequestHandler} for the part specific to selenium1 protocol
  * {@link WebDriverRequestHandler} for the part specific to webdriver protocol
@@ -58,6 +59,7 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 	private Map<String, Object> desiredCapabilities = null;
 	private RequestType requestType = null;
 	private TestSession session = null;
+    private long created;
 
 	private boolean showWarning = true;
 
@@ -66,7 +68,7 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 
 	private static final Logger log = Logger.getLogger(RequestHandler.class.getName());
 
-  /**
+	/**
 	 * Detect what kind of protocol ( selenium1 vs webdriver ) is used by the
 	 * request and create the associated handler.
 	 * 
@@ -87,6 +89,7 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 		this.request = request;
 		this.response = response;
 		this.registry = registry;
+        this.created = System.currentTimeMillis();
 	}
 
 	/**
@@ -140,7 +143,15 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 	public void process() {
 		switch (getRequestType()) {
 		case START_SESSION:
-			handleNewSession();
+            try {
+    			handleNewSession();
+            } catch (Exception e) {
+                // Make sure we yank the session from the request queue, since any returned error will propagate to the
+                // client, so there's no chance of this request ever succeeding.
+                registry.getNewSessionRequests().remove(this);
+
+                throw(new RuntimeException(e));
+            }
 			break;
 		case REGULAR:
 		case STOP_SESSION:
@@ -183,9 +194,23 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 			// signal, and only after that await will be reached, never
 			// signalled
 			registry.addNewSessionRequest(this);
-			sessionHasBeenAssigned.await();
+
+            // Maintain compatibility with Grid 1.x, which had the ability to specify how long to wait before canceling
+            // a request.
+            if (Hub.getGrid1Config().containsKey("newSessionWaitTimeout")) {
+                long startTime = System.currentTimeMillis();
+    			sessionHasBeenAssigned.await(Hub.getGrid1Config().get("newSessionWaitTimeout"), TimeUnit.MILLISECONDS);
+                long endTime = System.currentTimeMillis();
+
+                if ((session == null) && ((endTime - startTime) >= Hub.getGrid1Config().get("newSessionWaitTimeout"))) {
+                    throw new RuntimeException("Request timed out waiting for a node to become available.");
+                }
+            } else {
+                // Wait until a proxy becomes available to handle the request.
+                sessionHasBeenAssigned.await();
+            }
 		} catch (InterruptedException e) {
-			// e.printStackTrace();
+			e.printStackTrace();
 		} finally {
 			lock.unlock();
 		}
@@ -214,7 +239,8 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 		String externalKey = forwardNewSessionRequest(session);
 		if (externalKey == null) {
 			session.terminate();
-            // TODO (kmenard 04/10/11): We should indicate what the requested session type is.
+			// TODO (kmenard 04/10/11): We should indicate what the requested
+			// session type is.
 			throw new GridException("Error getting a new session from the remote." + registry.getAllProxies());
 		} else {
 			session.setExternalKey(externalKey);
@@ -335,6 +361,21 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 		return session;
 	}
 
+	/**
+	 * return the session from the server ( = opaque handle used by the server
+	 * to determine where to route session-specific commands fro mthe JSON wire
+	 * protocol ). will be null until the request has been processed.
+	 * 
+	 * @return
+	 */
+	public String getServerSession() {
+		if (session == null) {
+			return null;
+		} else {
+			return session.getExternalKey();
+		}
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder b = new StringBuilder();
@@ -343,14 +384,13 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 		b.append("\n");
 		return b.toString();
 	}
-	
-	
-	public String debug(){
+
+	public String debug() {
 		StringBuilder b = new StringBuilder();
 		b.append("\nmethod: " + request.getMethod());
 		b.append("\npathInfo: " + request.getPathInfo());
 		b.append("\nuri: " + request.getRequestURI());
-		b.append("\ncontent :"+getRequestBody());
+		b.append("\ncontent :" + getRequestBody());
 		return b.toString();
 	}
 
@@ -378,4 +418,8 @@ public abstract class RequestHandler implements Comparable<RequestHandler> {
 			return false;
 		return true;
 	}
+
+    public long getCreated() {
+        return created;
+    }
 }

@@ -39,7 +39,6 @@ public class ProxyStatusServlet extends RegistryBasedServlet {
 	}
 
 	protected void process(HttpServletRequest request, HttpServletResponse response) throws IOException {
-		System.out.println("TEST");
 		response.setContentType("text/html");
 		response.setCharacterEncoding("UTF-8");
 		response.setStatus(200);
@@ -65,10 +64,10 @@ public class ProxyStatusServlet extends RegistryBasedServlet {
 			}
 			rd.close();
 			String json = s.toString();
-			if (json != null && !"".equals(json)){
-				requestJSON = new JSONObject(json);	
+			if (json != null && !"".equals(json)) {
+				requestJSON = new JSONObject(json);
 			}
-			
+
 		}
 
 		JSONObject res = new JSONObject();
@@ -79,7 +78,7 @@ public class ProxyStatusServlet extends RegistryBasedServlet {
 		if (requestJSON == null) {
 			id = request.getParameter("id");
 		} else {
-			if ( !requestJSON.has("id") ) {
+			if (!requestJSON.has("id")) {
 				res.put("msg", "you need to specify at least an id when call the node  status service.");
 				return res;
 			} else {
@@ -136,11 +135,13 @@ public class ProxyStatusServlet extends RegistryBasedServlet {
 
 	private List<String> getExtraMethodsRequested(JSONObject request) {
 		List<String> res = new ArrayList<String>();
-		
+
 		for (Iterator iterator = request.keys(); iterator.hasNext();) {
 			String key = (String) iterator.next();
-			res.add(key);
-			
+			if (!"id".equals(key)) {
+				res.add(key);
+			}
+
 		}
 		return res;
 	}

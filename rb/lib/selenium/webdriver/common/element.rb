@@ -112,17 +112,21 @@ module Selenium
       #
 
       def send_keys(*args)
-        args.each do |arg|
+        values = args.map do |arg|
           case arg
           when Symbol
-            arg = Keys[arg]
+            Keys[arg]
           when Array
             arg = arg.map { |e| e.kind_of?(Symbol) ? Keys[e] : e }.join
             arg << Keys[:null]
-          end
 
-          bridge.sendKeysToElement(@id, arg.to_s)
+            arg
+          else
+            arg.to_s
+          end
         end
+
+        bridge.sendKeysToElement @id, values
       end
       alias_method :send_key, :send_keys
 
@@ -169,6 +173,7 @@ module Selenium
       #
 
       def select
+        warn "#{self.class}#select is deprecated. Please use #{self.class}#click and determine the current state with #{self.class}#selected?"
         bridge.setElementSelected @id
       end
 
@@ -185,6 +190,7 @@ module Selenium
       #
 
       def toggle
+        warn "#{self.class}#toggle is deprecated. Please use #{self.class}#click and determine the current state with #{self.class}#selected?"
         bridge.toggleElement @id
       end
 
