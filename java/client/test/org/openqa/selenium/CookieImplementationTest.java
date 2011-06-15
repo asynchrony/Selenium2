@@ -379,6 +379,18 @@ public class CookieImplementationTest extends AbstractDriverTestCase {
         "Cookie expired before it was set, so nothing should be returned: " + cookie, cookie);
   }
 
+  public void testCanAddDomainCookieForLocalhost() {
+      AppServer appServer = GlobalTestEnvironment.get().getAppServer();
+
+      driver.get(appServer.whereIs("animals"));
+      Cookie cookie = new Cookie("my-cookie", "my-value", ".localhost", "/", null);
+
+      driver.manage().addCookie(cookie);
+
+      String current = (String) ((JavascriptExecutor) driver).executeScript("return document.cookie");
+      assertTrue(current.contains("my-cookie"));
+  }
+
   @Ignore(SELENESE)
   private String gotoValidDomainAndClearCookies() {
     AppServer appServer = GlobalTestEnvironment.get().getAppServer();
