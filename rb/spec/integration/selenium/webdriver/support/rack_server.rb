@@ -12,7 +12,7 @@ module Selenium
           @path = path
           @app  = Rack::File.new(path)
 
-          @host = "127.0.0.1"
+          @host = "localhost"
           @port = Integer(port || PortProber.above(8180))
         end
 

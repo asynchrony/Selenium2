@@ -13,6 +13,20 @@ describe "Options" do
       cookies.first[:value].should == "bar"
     end
 
+    it "should be able to add a domain cookie for localhost" do
+      driver.navigate.to url_for("xhtmlTest.html")
+      driver.manage.delete_all_cookies
+
+      driver.manage.add_cookie :name => "foo", :value => "bar", :domain => ".localhost"
+
+      cookies = driver.manage.all_cookies
+
+      cookies.should have(1).things
+      cookies.first[:name].should == "foo"
+      cookies.first[:value].should == "bar"
+      cookies.first[:domain].should == ".localhost"
+    end
+
     it "should delete one" do
       driver.navigate.to url_for("xhtmlTest.html")
 
